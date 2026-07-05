@@ -3,7 +3,7 @@ name: 01 - Building Blocks
 on:
   push:
     branches:
-      - main
+      - gurus
   workflow_dispatch:
 
 jobs:
@@ -16,10 +16,10 @@ jobs:
   echo-goodbye:
     runs-on: ubuntu-latest
     steps:
-      - name: Fail step
+      - name: Sucess step
         run: |
           echo "I will fail"
-          exit 1
+          exit 0
 
       - name: Say goodbye
         run: echo "Goodbye !"
