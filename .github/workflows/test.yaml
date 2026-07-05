@@ -16,10 +16,11 @@ jobs:
   echo-goodbye:
     runs-on: ubuntu-latest
     steps:
-      - name: Fail step
+      - name: Gurusundaram's First step
         run: |
-          echo "I will fail"
-          exit 1
+          echo "I will sucess"
+          echo "Guru is a devops Engg"
+          exit 0
 
-      - name: Say goodbye
-        run: echo "Goodbye !"
+      - name: Guru became Expert
+        run: echo "Guru started Rocking !"
