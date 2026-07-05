@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  echo-hello:
+  echo-TF-Plan:
     runs-on: ubuntu-latest
     steps:
       - name: Say hello
         run: echo "Hello, World!"
 
-  echo-goodbye:
+  echo-TF_Apply:
     runs-on: ubuntu-latest
     steps:
       - name: Gurusundaram's First step
