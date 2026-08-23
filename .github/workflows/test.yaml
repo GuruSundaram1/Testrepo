@@ -24,8 +24,6 @@ jobs:
   kics:
     name: KICS
 
-    # Run for PR creation/update,
-    # OR run again when the PR review is approved
     if: >
       github.actor != 'dependabot[bot]' &&
       (
@@ -43,10 +41,10 @@ jobs:
       cloud-provider: azure
       gh_runner: ubuntu-latest
 
+
   plan:
     name: Terraform Plan
 
-    # Plan must wait for KICS
     needs: kics
 
     if: >
@@ -93,13 +91,12 @@ jobs:
           path: tfplan
           retention-days: 1
 
+
   apply:
     name: Terraform Apply
 
-    # Apply waits for the newly executed Plan
     needs: plan
 
-    # Apply only after an approved PR review
     if: >
       github.actor != 'dependabot[bot]' &&
       github.event_name == 'pull_request_review' &&
