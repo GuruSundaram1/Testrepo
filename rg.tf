@@ -8,8 +8,7 @@ terraform {
   }
 }
 
-### gurusundaram
-
+#sundaram
 
 
 resource "azurerm_resource_group" "appgrp" {
