@@ -8,9 +8,9 @@ terraform {
   }
 }
 
-#sundaram
+#sunar
 
 resource "azurerm_resource_group" "appgrp" {
-  name     = "app-rg"
+  name     = "app-rg11"
   location = "North Europe"
 }
