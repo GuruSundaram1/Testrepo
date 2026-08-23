@@ -1,17 +1,19 @@
 name: Terraform
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "CHANGELOG.md"
-
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
     paths-ignore:
       - "CHANGELOG.md"
+
+  pull_request_review:
+    types:
+      - submitted
 
 permissions:
   id-token: write
@@ -21,8 +23,21 @@ permissions:
 jobs:
   kics:
     name: KICS
-    if: github.actor != 'dependabot[bot]'
+
+    # Run for PR creation/update,
+    # OR run again when the PR review is approved
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event_name == 'pull_request' ||
+        (
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        )
+      )
+
     uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@v0.0.1
+
     with:
       image-version: v1.6.10-alpine
       cloud-provider: azure
@@ -30,7 +45,20 @@ jobs:
 
   plan:
     name: Terraform Plan
-    if: github.actor != 'dependabot[bot]'
+
+    # Plan must wait for KICS
+    needs: kics
+
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event_name == 'pull_request' ||
+        (
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        )
+      )
+
     runs-on: ubuntu-latest
 
     steps:
@@ -67,13 +95,16 @@ jobs:
 
   apply:
     name: Terraform Apply
+
+    # Apply waits for the newly executed Plan
+    needs: plan
+
+    # Apply only after an approved PR review
     if: >
       github.actor != 'dependabot[bot]' &&
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push'
-    needs:
-      - kics
-      - plan
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
+
     runs-on: ubuntu-latest
 
     steps:
