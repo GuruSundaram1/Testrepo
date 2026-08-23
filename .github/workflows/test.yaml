@@ -41,11 +41,8 @@ jobs:
       cloud-provider: azure
       gh_runner: ubuntu-latest
 
-
   plan:
     name: Terraform Plan
-
-    # Plan must wait for KICS
     needs: kics
 
     if: >
@@ -92,11 +89,8 @@ jobs:
           path: tfplan
           retention-days: 1
 
-
   apply:
     name: Terraform Apply
-
-    # Apply waits for the newly executed Plan
     needs: plan
 
     if: >

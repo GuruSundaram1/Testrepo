@@ -9,7 +9,7 @@ terraform {
 }
 
 
-#RG guru
+#RG
 
 
 
