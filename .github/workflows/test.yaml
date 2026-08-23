@@ -9,7 +9,7 @@ on:
       - synchronize
       - reopened
     paths-ignore:
-      - "CHANGELOG.md"
+      - CHANGELOG.md
 
   pull_request_review:
     types:
@@ -34,7 +34,7 @@ jobs:
         )
       )
 
-    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@v0.0.1
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@main
 
     with:
       image-version: v1.6.10-alpine
@@ -45,6 +45,7 @@ jobs:
   plan:
     name: Terraform Plan
 
+    # Plan must wait for KICS
     needs: kics
 
     if: >
@@ -95,6 +96,7 @@ jobs:
   apply:
     name: Terraform Apply
 
+    # Apply waits for the newly executed Plan
     needs: plan
 
     if: >
