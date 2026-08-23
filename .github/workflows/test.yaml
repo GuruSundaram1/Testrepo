@@ -1,26 +1,105 @@
-name: 01 - Building Blocks
+name: Terraform
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+    paths-ignore:
+      - "CHANGELOG.md"
+
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "CHANGELOG.md"
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
 
 jobs:
-  echo-TF-Plan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Say hello
-        run: echo "Hello, World!"
+  kics:
+    name: KICS
+    if: github.actor != 'dependabot[bot]'
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@v0.0.1
+    with:
+      image-version: v1.6.10-alpine
+      cloud-provider: azure
+      gh_runner: ubuntu-latest
 
-  echo-TF_Apply:
+  plan:
+    name: Terraform Plan
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    steps:
-      - name: Gurusundaram's First step
-        run: |
-          echo "I will sucess"
-          echo "Guru is a devops Engg"
-          exit 0
 
-      - name: Guru became Expert
-        run: echo "Guru started Rocking !"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: tfplan
+          retention-days: 1
+
+  apply:
+    name: Terraform Apply
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
+    needs:
+      - kics
+      - plan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: .
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
