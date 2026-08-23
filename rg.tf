@@ -10,8 +10,7 @@ terraform {
 
 #sundaram
 
-
 resource "azurerm_resource_group" "appgrp" {
-  name     = "app-grp"
+  name     = "app-rg"
   location = "North Europe"
 }
