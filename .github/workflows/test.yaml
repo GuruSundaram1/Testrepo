@@ -23,6 +23,7 @@ permissions:
 jobs:
   kics:
     name: KICS
+
     if: >
       github.actor != 'dependabot[bot]' &&
       (
@@ -33,7 +34,7 @@ jobs:
         )
       )
 
-    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@v0.0.1
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@main
 
     with:
       image-version: v1.6.10-alpine
