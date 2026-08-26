@@ -35,8 +35,7 @@ jobs:
         )
       )
 
-    # FIXED: Swapped external reference for local workspace lookup
-    uses: ./.github/workflows/kics.yaml
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yaml@main
 
     with:
       image-version: v1.6.10-alpine
