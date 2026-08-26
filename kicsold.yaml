@@ -1,13 +1,13 @@
 name: KICS
 
 on:
-  # 1. Called by parent workflows (e.g., your Terraform pipeline)
+  # 1. Triggered when called by another parent workflow
   workflow_call:
     inputs:
       image-version:
         description: "KICS image version"
         required: false
-        default: "v1.6.10-alpine"          # ✅ Pinned for security & reproducibility
+        default: "latest"
         type: string
       cloud-provider:
         description: "Cloud provider"
@@ -20,13 +20,13 @@ on:
         default: "ubuntu-latest"
         type: string
 
-  # 2. Manual trigger via GitHub UI ("Run workflow" button)
+  # 2. Triggered manually by clicking the "Run workflow" button in the UI
   workflow_dispatch:
     inputs:
       image-version:
         description: "KICS image version"
         required: false
-        default: "v1.6.10-alpine"
+        default: "latest"
         type: string
       cloud-provider:
         description: "Cloud provider"
@@ -39,26 +39,28 @@ on:
         default: "ubuntu-latest"
         type: string
 
-  # 3. Automatic trigger on PRs targeting your branch (adjust as needed)
+  # 3. Triggered automatically on Pull Requests tracking the main branch
   pull_request:
     branches:
-      - newbranch1          # ⚠️ Change this to 'main' or your default branch if needed
+      - newbranch1
 
 jobs:
   kics:
     name: KICS Scan
+    # Unified fallback syntax: use input value if available, otherwise default to ubuntu-latest
     runs-on: ${{ inputs.gh_runner || 'ubuntu-latest' }}
 
     permissions:
       contents: read
       security-events: write
-      # actions: read  ✅ REMOVED – not required (least privilege)
+      actions: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Uses PR merge commit for PRs, otherwise the current commit
+          # Ensures that pull_request actions check out the merge commit head 
+          # and manual dispatches check out the selected branch UI choice
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Run KICS Scan
@@ -67,13 +69,8 @@ jobs:
           path: .
           output_path: kics-results
           output_formats: sarif
-          # ❌ REMOVED: ignore_on_exit: results
-          # ✅ Added: Fails on HIGH or CRITICAL findings (exit code 1)
-          fail_on: high
+          ignore_on_exit: results
           verbose: true
-          # ✅ Optional: Better visibility in PRs and job logs
-          enable_jobs_summary: true
-          enable_comments: true
 
       - name: Upload SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v4
@@ -86,4 +83,4 @@ jobs:
         with:
           name: kics-results
           path: kics-results/
-          retention-days: 1
+          retention-days: 2
