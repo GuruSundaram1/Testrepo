@@ -16,7 +16,7 @@ provider "azurerm" {
 }
 
 
-#Gurusundaram
+#Gurusundaram=guru
 
 
 
