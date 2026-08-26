@@ -1,6 +1,14 @@
 name: Terraform
 
 on:
+  # 1. Triggers on pushes/manual edits to ANY branch (enables continuous KICS scanning)
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - CHANGELOG.md
+
+  # 2. Triggers during the Pull Request review phase
   pull_request:
     branches:
       - main
@@ -11,11 +19,10 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - CHANGELOG.md
+  # 3. Triggers when a team member formally reviews a Pull Request
+  pull_request_review:
+    types:
+      - submitted
 
 permissions:
   id-token: write
@@ -26,7 +33,8 @@ permissions:
 jobs:
   kics:
     name: KICS
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    # FIXED: Runs unconditionally on ANY manual edit, branch push, or pull request
+    if: github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/kics.yaml
     with:
       image-version: v1.6.10-alpine
@@ -36,7 +44,10 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    # FIXED: Only runs planning if it's an active PR or during a PR review cycle
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
     runs-on: ubuntu-latest
 
     env:
@@ -56,7 +67,6 @@ jobs:
         with:
           terraform_version: "1.7.3"
 
-      # FIXED: Added code style verification BEFORE initialization
       - name: Terraform Format Check
         run: terraform fmt -check
 
@@ -85,7 +95,12 @@ jobs:
 
   apply:
     name: Terraform Apply
-    if: github.event_name == 'push' && github.actor != 'dependabot[bot]'
+    needs: plan
+    # STRICT GUARD: Only unblocks and executes when the PR review is officially APPROVED
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
     runs-on: ubuntu-latest
 
     env:
@@ -105,7 +120,6 @@ jobs:
         with:
           terraform_version: "1.7.3"
 
-      # FIXED: Added matching format verification before the execution lifecycle starts
       - name: Terraform Format Check
         run: terraform fmt -check
 
@@ -119,8 +133,11 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan (Merge Stage)
-        run: terraform plan -out=tfmergeplan
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: .
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfmergeplan
+        run: terraform apply -auto-approve tfplan
