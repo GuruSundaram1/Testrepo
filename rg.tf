@@ -17,7 +17,7 @@ provider "azurerm" {
 
 
 #Guru
-#g
+
 
 
 resource "azurerm_resource_group" "appgrp" {
@@ -26,7 +26,7 @@ resource "azurerm_resource_group" "appgrp" {
 }
 
 
-resource "azurerm_resource_group" "appgr" {
-  name     = "app-rg12"
+resource "azurerm_resource_group" "appgr1" {
+  name     = "app-rg112"
   location = "North Europe"
 }
