@@ -8,9 +8,23 @@ terraform {
   }
 }
 
-#sunar
 
+
+provider "azurerm" {
+  features {}
+  use_oidc = true
+}
+
+
+#Guru
+#Guru
 resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
+  location = "North Europe"
+}
+
+
+resource "azurerm_resource_group" "appgr" {
+  name     = "app-rg12"
   location = "North Europe"
 }

@@ -1,0 +1,130 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths-ignore:
+      - CHANGELOG.md
+
+  pull_request_review:
+    types:
+      - submitted
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  kics:
+    name: KICS
+
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event_name == 'pull_request' ||
+        (
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        )
+      )
+
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yaml@main
+
+    with:
+      image-version: v1.6.10-alpine
+      cloud-provider: azure
+      gh_runner: ubuntu-latest
+
+  plan:
+    name: Terraform Plan
+    needs: kics
+
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      (
+        github.event_name == 'pull_request' ||
+        (
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'approved'
+        )
+      )
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: tfplan
+          retention-days: 1
+
+  apply:
+    name: Terraform Apply
+    needs: plan
+
+    if: >
+      github.actor != 'dependabot[bot]' &&
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: .
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan

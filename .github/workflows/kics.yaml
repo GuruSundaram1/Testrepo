@@ -40,9 +40,9 @@ on:
         type: string
 
   # 3. Triggered automatically on Pull Requests tracking the main branch
-  #pull_request:
-    #branches:
-      #- newbranch1
+  pull_request:
+    branches:
+      - newbranch1
 
 jobs:
   kics:
