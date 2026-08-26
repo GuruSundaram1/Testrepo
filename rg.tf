@@ -27,7 +27,7 @@ resource "azurerm_resource_group" "appgr111" {
   tags = {
     Environment = "production"
     ManagedBy   = "Terraform"
-    Owner       = "GuruSundaram1"
+    Owner       = "GuruSundaram"
     Purpose     = "Staging-Validation"
   }
 
