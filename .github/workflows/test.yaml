@@ -1,14 +1,14 @@
 name: Terraform
 
 on:
-  # 1. Triggers on pushes/manual edits to ANY branch (enables continuous KICS & Plan)
+  # 1. Triggers ONLY when code lands on the main branch (e.g., when a PR is merged)
   push:
     branches:
-      - '**'
+      - main
     paths-ignore:
       - CHANGELOG.md
 
-  # 2. Triggers during the Pull Request lifecycle
+  # 2. Triggers ONLY when an active Pull Request is open targeting the main branch
   pull_request:
     branches:
       - main
@@ -38,7 +38,8 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    if: github.actor != 'dependabot[bot]'
+    # FIXED: Only runs during the staging Pull Request validation cycle
+    if: github.actor != 'dependabot[bot]' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     env:
@@ -87,7 +88,7 @@ jobs:
   apply:
     name: Terraform Apply
     needs: plan
-    # FIXED: Only runs when a code push lands specifically on the main branch (e.g. via a PR Merge)
+    # FIXED: Only runs when a code push lands specifically on the main branch (e.g., via a PR Merge)
     if: github.actor != 'dependabot[bot]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
@@ -121,10 +122,8 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # FIXED: Generate a clean merge-stage deployment plan right before applying
       - name: Terraform Plan (Merge Stage)
         run: terraform plan -out=tfmergeplan
 
-      # FIXED: Executes the fresh merge plan against your active Azure Subscription
       - name: Terraform Apply
         run: terraform apply -auto-approve tfmergeplan
