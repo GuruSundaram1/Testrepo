@@ -18,7 +18,7 @@ provider "azurerm" {
 
 #Guru
 #guru
-#guru
+
 
 
 resource "azurerm_resource_group" "appgrp" {
