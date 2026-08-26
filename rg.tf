@@ -8,8 +8,7 @@ terraform {
   }
 }
 
-#Gurusundaram
-
+#Gu
 resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
   location = "North Europe"
