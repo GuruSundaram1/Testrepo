@@ -84,4 +84,4 @@ jobs:
         with:
           name: kics-results
           path: kics-results/
-          retention-days: 30
+          retention-days: 3
