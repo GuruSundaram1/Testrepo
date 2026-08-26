@@ -7,7 +7,7 @@ on:
       image-version:
         description: "KICS image version"
         required: false
-        default: "v1.6.10-alpine"          # ✅ Pinned for security & reproducibility
+        default: "v1.6.10-alpine"
         type: string
       cloud-provider:
         description: "Cloud provider"
@@ -42,7 +42,7 @@ on:
   # 3. Automatic trigger on PRs targeting your branch (adjust as needed)
   pull_request:
     branches:
-      - newbranch1          # ⚠️ Change this to 'main' or your default branch if needed
+      - newbranch1          # Change this to 'main' or your default branch
 
 jobs:
   kics:
@@ -52,13 +52,12 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      # actions: read  ✅ REMOVED – not required (least privilege)
+      # actions: read  REMOVED – not required
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Uses PR merge commit for PRs, otherwise the current commit
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Run KICS Scan
@@ -67,13 +66,12 @@ jobs:
           path: .
           output_path: kics-results
           output_formats: sarif
-          # ❌ REMOVED: ignore_on_exit: results
-          # ✅ Added: Fails on HIGH or CRITICAL findings (exit code 1)
-          fail_on: high
+          fail_on: high                # ✅ Fails on HIGH/CRITICAL findings
+          ignore_on_exit: none         # ✅ REQUIRED – overrides the default 'results' value
           verbose: true
-          # ✅ Optional: Better visibility in PRs and job logs
-          enable_jobs_summary: true
-          enable_comments: true
+          enable_jobs_summary: true    # ✅ Shows summary in job logs
+          enable_comments: true        # ✅ Optional – adds PR comments (needs extra permissions)
+          # Note: For enable_comments to work, you must also add 'issues: write' to permissions.
 
       - name: Upload SARIF to Code Scanning
         uses: github/codeql-action/upload-sarif@v4
@@ -86,4 +84,4 @@ jobs:
         with:
           name: kics-results
           path: kics-results/
-          retention-days: 1
+          retention-days: 3
