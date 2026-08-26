@@ -1,6 +1,7 @@
 name: Terraform
 
 on:
+  # Triggers for the Validation phase (KICS & Plan)
   pull_request:
     branches:
       - main
@@ -11,9 +12,12 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
-  pull_request_review:
-    types:
-      - submitted
+  # Triggers for the Deployment phase (Apply) when a PR gets merged
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - CHANGELOG.md
 
 permissions:
   id-token: write
@@ -24,19 +28,9 @@ permissions:
 jobs:
   kics:
     name: KICS
-
-    if: >
-      github.actor != 'dependabot[bot]' &&
-      (
-        github.event_name == 'pull_request' ||
-        (
-          github.event_name == 'pull_request_review' &&
-          github.event.review.state == 'approved'
-        )
-      )
-
+    # ONLY run validation when it's a pull request (not after it has already merged)
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/kics.yaml
-
     with:
       image-version: v1.6.10-alpine
       cloud-provider: azure
@@ -45,17 +39,8 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-
-    if: >
-      github.actor != 'dependabot[bot]' &&
-      (
-        github.event_name == 'pull_request' ||
-        (
-          github.event_name == 'pull_request_review' &&
-          github.event.review.state == 'approved'
-        )
-      )
-
+    # Run only during the Pull Request staging phase
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     env:
@@ -75,7 +60,6 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          # FIXED: Skips slow network token revocation on short-lived runners
           skip-az-cli-logout: true
 
       - name: Setup Terraform
@@ -101,13 +85,8 @@ jobs:
 
   apply:
     name: Terraform Apply
-    needs: plan
-
-    if: >
-      github.actor != 'dependabot[bot]' &&
-      github.event_name == 'pull_request_review' &&
-      github.event.review.state == 'approved'
-
+    # REMOVED 'needs: plan' because push events run independently of the PR plan
+    if: github.event_name == 'push' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     env:
@@ -127,7 +106,6 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          # FIXED: Skips slow network token revocation on short-lived runners
           skip-az-cli-logout: true
 
       - name: Setup Terraform
@@ -135,14 +113,9 @@ jobs:
         with:
           terraform_version: "1.7.3"
 
-      - name: Setup Terraform Init
+      - name: Terraform Init
         run: terraform init
 
-      - name: Download Terraform Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan
-          path: .
-
+      # MODIFIED: Changed from loading an artifact to running directly against the newly merged codebase
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
