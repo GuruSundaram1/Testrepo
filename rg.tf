@@ -16,7 +16,7 @@ provider "azurerm" {
 }
 
 
-#Guru
+#Gurusundaram
 
 
 
@@ -24,4 +24,11 @@ provider "azurerm" {
 resource "azurerm_resource_group" "appgr111" {
   name     = "app-rg112"
   location = "North Europe"
+  tags = {
+    Environment = "production"
+    ManagedBy   = "Terraform"
+    Owner       = "GuruSundaram1"
+    Purpose     = "Staging-Validation"
+  }
+
 }

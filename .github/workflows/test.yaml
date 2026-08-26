@@ -1,14 +1,14 @@
 name: Terraform
 
 on:
-  # 1. Triggers on pushes/manual edits to ANY branch (enables continuous KICS scanning)
+  # 1. Triggers on pushes/manual edits to ANY branch (enables continuous KICS & Plan)
   push:
     branches:
       - '**'
     paths-ignore:
       - CHANGELOG.md
 
-  # 2. Triggers during the Pull Request review phase
+  # 2. Triggers during the Pull Request lifecycle
   pull_request:
     branches:
       - main
@@ -33,7 +33,7 @@ permissions:
 jobs:
   kics:
     name: KICS
-    # FIXED: Runs unconditionally on ANY manual edit, branch push, or pull request
+    # Runs unconditionally on ANY manual edit, branch push, or pull request event
     if: github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/kics.yaml
     with:
@@ -44,10 +44,8 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    # FIXED: Only runs planning if it's an active PR or during a PR review cycle
-    if: >
-      github.actor != 'dependabot[bot]' &&
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
+    # FIXED: Allows planning to run unconditionally on ANY branch push or PR event
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     env:
@@ -83,7 +81,7 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan (PR Stage)
+      - name: Terraform Plan (Staging)
         run: terraform plan -out=tfplan
 
       - name: Upload Terraform Plan
@@ -96,7 +94,7 @@ jobs:
   apply:
     name: Terraform Apply
     needs: plan
-    # STRICT GUARD: Only unblocks and executes when the PR review is officially APPROVED
+    # STRICT GUARD: Stays locked and will ONLY unblock and run if an active PR review is APPROVED
     if: >
       github.actor != 'dependabot[bot]' &&
       github.event_name == 'pull_request_review' &&
