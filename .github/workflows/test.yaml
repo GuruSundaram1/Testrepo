@@ -58,7 +58,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # FIXED: Added the required environment block to feed AzureRM v4.x parameters
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
@@ -76,6 +75,8 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          # FIXED: Skips slow network token revocation on short-lived runners
+          skip-az-cli-logout: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -109,7 +110,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # FIXED: Added matching environment configuration block to authorization context
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
@@ -127,13 +127,15 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          # FIXED: Skips slow network token revocation on short-lived runners
+          skip-az-cli-logout: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.3"
 
-      - name: Terraform Init
+      - name: Setup Terraform Init
         run: terraform init
 
       - name: Download Terraform Plan
