@@ -1,7 +1,6 @@
 name: Terraform
 
 on:
-  # Triggers for the Validation phase (KICS & Plan)
   pull_request:
     branches:
       - main
@@ -12,7 +11,6 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
-  # Triggers for the Deployment phase (Apply) when a PR gets merged
   push:
     branches:
       - main
@@ -28,7 +26,6 @@ permissions:
 jobs:
   kics:
     name: KICS
-    # ONLY run validation when it's a pull request (not after it has already merged)
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/kics.yaml
     with:
@@ -39,7 +36,6 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    # Run only during the Pull Request staging phase
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
@@ -49,6 +45,7 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: true
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      AZURE_CORE_COLLECT_TELEMETRY: "false"
 
     steps:
       - name: Checkout
@@ -60,7 +57,6 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          skip-az-cli-logout: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -85,7 +81,6 @@ jobs:
 
   apply:
     name: Terraform Apply
-    # REMOVED 'needs: plan' because push events run independently of the PR plan
     if: github.event_name == 'push' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
@@ -95,6 +90,7 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: true
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      AZURE_CORE_COLLECT_TELEMETRY: "false"
 
     steps:
       - name: Checkout
@@ -106,7 +102,6 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          skip-az-cli-logout: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -116,6 +111,5 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # MODIFIED: Changed from loading an artifact to running directly against the newly merged codebase
       - name: Terraform Apply
         run: terraform apply -auto-approve
