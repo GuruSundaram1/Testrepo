@@ -1,0 +1,86 @@
+name: KICS
+
+on:
+  # 1. Triggered when called by another parent workflow
+  workflow_call:
+    inputs:
+      image-version:
+        description: "KICS image version"
+        required: false
+        default: "latest"
+        type: string
+      cloud-provider:
+        description: "Cloud provider"
+        required: false
+        default: "azure"
+        type: string
+      gh_runner:
+        description: "GitHub runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+
+  # 2. Triggered manually by clicking the "Run workflow" button in the UI
+  workflow_dispatch:
+    inputs:
+      image-version:
+        description: "KICS image version"
+        required: false
+        default: "latest"
+        type: string
+      cloud-provider:
+        description: "Cloud provider"
+        required: false
+        default: "azure"
+        type: string
+      gh_runner:
+        description: "GitHub runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+
+  # 3. Triggered automatically on Pull Requests tracking the main branch
+  #pull_request:
+    #branches:
+      #- newbranch1
+
+jobs:
+  kics:
+    name: KICS Scan
+    # Unified fallback syntax: use input value if available, otherwise default to ubuntu-latest
+    runs-on: ${{ inputs.gh_runner || 'ubuntu-latest' }}
+
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Ensures that pull_request actions check out the merge commit head 
+          # and manual dispatches check out the selected branch UI choice
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run KICS Scan
+        uses: checkmarx/kics-github-action@v2
+        with:
+          path: .
+          output_path: kics-results
+          output_formats: sarif
+          ignore_on_exit: results
+          verbose: true
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: kics-results/results.sarif
+          category: KICS
+
+      - name: Upload KICS Results Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kics-results
+          path: kics-results/
+          retention-days: 30
