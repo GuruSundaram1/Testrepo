@@ -1,13 +1,12 @@
 name: Terraform
 
 on:
-  # ✅ CHANGED: Trigger on push to ANY branch (not just main)
+  # 1. Push to ANY branch (including main)
   push:
-    # REMOVED: branches: [ main ]
     paths-ignore:
       - CHANGELOG.md
 
-  # Pull Requests targeting main (unchanged)
+  # 2. Pull Requests targeting main
   pull_request:
     branches:
       - main
@@ -46,8 +45,6 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    # ✅ UPDATED CONDITION:
-    # Runs on PRs, OR on pushes to non-main branches
     if: |
       github.actor != 'dependabot[bot]' && (
         github.event_name == 'pull_request' ||
@@ -91,11 +88,14 @@ jobs:
       - name: Terraform Plan (Staging)
         run: terraform plan -out=tfplan
 
-      # 🔐 ENCRYPT the plan file before uploading (protects secrets in output)
+      # 🔐 ENCRYPT the plan file before uploading
+      # Uses the TF_GPG_PASSPHRASE secret (must be set in repository)
       - name: Encrypt Terraform Plan
         run: |
-          echo "${{ secrets.TF_GPG_PASSPHRASE }}" | \
-          gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 tfplan
+          # If the secret is not set, this will fail. Ensure you have set it.
+          gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
+              --symmetric --cipher-algo AES256 tfplan
           rm tfplan  # Remove unencrypted file
 
       - name: Upload Encrypted Terraform Plan
@@ -111,7 +111,6 @@ jobs:
   apply:
     name: Terraform Apply
     needs: plan
-    # ✅ UNCHANGED: Only runs on push to main
     if: github.actor != 'dependabot[bot]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
@@ -145,11 +144,35 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      # Note: For simplicity, we re‑run `plan` here.
-      # The encrypted artifact from the PR is not used in this basic setup.
-      # To apply the *exact* reviewed plan, use a `workflow_run` trigger.
+      # --------------------------------------------------------------------
+      # Option A: Apply the reviewed plan (recommended for production)
+      # Uncomment the following steps and comment out Option B.
+      # --------------------------------------------------------------------
+      # - name: Download Encrypted Plan
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: terraform-plan-${{ github.sha }}
+      #     path: .
+      #     # Note: This downloads the artifact from the *same* run.
+      #     # For cross-run downloads, use a `workflow_run` trigger (see advanced).
+      #
+      # - name: Decrypt Plan
+      #   run: |
+      #     gpg --batch --yes --pinentry-mode loopback \
+      #         --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
+      #         --decrypt tfplan.gpg > tfplan
+      #
+      # - name: Terraform Apply
+      #   run: terraform apply -auto-approve tfplan
+      # --------------------------------------------------------------------
+
+      # --------------------------------------------------------------------
+      # Option B: Re‑run plan and apply (simpler, used by default)
+      # This is what the current workflow does.
+      # --------------------------------------------------------------------
       - name: Terraform Plan (Merge Stage)
         run: terraform plan -out=tfmergeplan
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfmergeplan
+      # --------------------------------------------------------------------
