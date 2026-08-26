@@ -35,7 +35,7 @@ jobs:
         )
       )
 
-    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@main
+    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yaml@main
 
     with:
       image-version: v1.6.10-alpine

@@ -14,3 +14,9 @@ resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
   location = "North Europe"
 }
+
+
+resource "azurerm_resource_group" "appgr" {
+  name     = "app-rg12"
+  location = "North Europe"
+}
