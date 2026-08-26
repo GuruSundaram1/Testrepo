@@ -1,14 +1,13 @@
 name: Terraform
 
 on:
-  # 1. Triggers when code is merged to main (push after PR merge)
+  # ✅ CHANGED: Trigger on push to ANY branch (not just main)
   push:
-    branches:
-      - main
+    # REMOVED: branches: [ main ]
     paths-ignore:
       - CHANGELOG.md
 
-  # 2. Triggers on PR activity
+  # Pull Requests targeting main (unchanged)
   pull_request:
     branches:
       - main
@@ -39,12 +38,21 @@ jobs:
       gh_runner: ubuntu-latest
 
   # ======================================================
-  # 2. TERRAFORM PLAN (runs only on Pull Requests)
+  # 2. TERRAFORM PLAN
+  #    Runs on:
+  #    - Pull Requests (PRs) targeting main
+  #    - Push to any branch EXCEPT main
   # ======================================================
   plan:
     name: Terraform Plan
     needs: kics
-    if: github.actor != 'dependabot[bot]' && github.event_name == 'pull_request'
+    # ✅ UPDATED CONDITION:
+    # Runs on PRs, OR on pushes to non-main branches
+    if: |
+      github.actor != 'dependabot[bot]' && (
+        github.event_name == 'pull_request' ||
+        (github.event_name == 'push' && github.ref != 'refs/heads/main')
+      )
     runs-on: ubuntu-latest
 
     env:
@@ -93,7 +101,7 @@ jobs:
       - name: Upload Encrypted Terraform Plan
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan
+          name: terraform-plan-${{ github.sha }}
           path: tfplan.gpg
           retention-days: 1
 
@@ -103,6 +111,7 @@ jobs:
   apply:
     name: Terraform Apply
     needs: plan
+    # ✅ UNCHANGED: Only runs on push to main
     if: github.actor != 'dependabot[bot]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
@@ -138,7 +147,7 @@ jobs:
 
       # Note: For simplicity, we re‑run `plan` here.
       # The encrypted artifact from the PR is not used in this basic setup.
-      # To apply the *exact* reviewed plan, use a `workflow_run` trigger (see Advanced section below).
+      # To apply the *exact* reviewed plan, use a `workflow_run` trigger.
       - name: Terraform Plan (Merge Stage)
         run: terraform plan -out=tfmergeplan
 
