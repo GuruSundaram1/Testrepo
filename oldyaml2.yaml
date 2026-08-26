@@ -35,6 +35,7 @@ jobs:
         )
       )
 
+    # FIXED: Swapped external reference for local workspace lookup
     uses: ./.github/workflows/kics.yaml
 
     with:
@@ -57,14 +58,6 @@ jobs:
       )
 
     runs-on: ubuntu-latest
-
-    # FIXED: Added the required environment block to feed AzureRM v4.x parameters
-    env:
-      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-      ARM_USE_OIDC: true
-      TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
     steps:
       - name: Checkout
@@ -108,14 +101,6 @@ jobs:
       github.event.review.state == 'approved'
 
     runs-on: ubuntu-latest
-
-    # FIXED: Added matching environment configuration block to authorization context
-    env:
-      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-      ARM_USE_OIDC: true
-      TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
     steps:
       - name: Checkout
