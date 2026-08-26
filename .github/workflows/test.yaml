@@ -35,7 +35,7 @@ jobs:
         )
       )
 
-    uses: GuruSundaram1/devops-meta-resources/.github/workflows/kics.yml@main
+    uses: ./.github/workflows/kics.yaml
 
     with:
       image-version: v1.6.10-alpine
@@ -58,11 +58,17 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # FIXED: Added the required environment block to feed AzureRM v4.x parameters
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: true
+      TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
     steps:
-      - name: Checkout PR code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Azure Login using OIDC
         uses: azure/login@v2
@@ -103,11 +109,17 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # FIXED: Added matching environment configuration block to authorization context
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: true
+      TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
     steps:
-      - name: Checkout approved PR code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Azure Login using OIDC
         uses: azure/login@v2
