@@ -8,7 +8,7 @@ terraform {
   }
 }
 
-#gutu
+#gut
 
 resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
