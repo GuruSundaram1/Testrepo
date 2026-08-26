@@ -51,6 +51,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      # FIXED: Added code style verification BEFORE initialization
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
       - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
@@ -58,18 +67,13 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.7.3"
-
       - name: Terraform Init
         run: terraform init
 
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan
+      - name: Terraform Plan (PR Stage)
         run: terraform plan -out=tfplan
 
       - name: Upload Terraform Plan
@@ -96,6 +100,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.3"
+
+      # FIXED: Added matching format verification before the execution lifecycle starts
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
       - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
@@ -103,13 +116,11 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.7.3"
-
       - name: Terraform Init
         run: terraform init
 
+      - name: Terraform Plan (Merge Stage)
+        run: terraform plan -out=tfmergeplan
+
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfmergeplan
