@@ -8,6 +8,13 @@ terraform {
   }
 }
 
+
+
+provider "azurerm" {
+  features {}
+}
+
+
 #Guru
 #Guru
 resource "azurerm_resource_group" "appgrp" {
