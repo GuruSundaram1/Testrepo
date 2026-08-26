@@ -19,7 +19,8 @@ provider "azurerm" {
 #Guru
 #guru
 #guru
-#Guru
+
+
 resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
   location = "North Europe"
