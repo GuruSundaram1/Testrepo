@@ -17,7 +17,8 @@ provider "azurerm" {
 
 
 #Guru
-#g
+#guru
+#guru
 #Guru
 resource "azurerm_resource_group" "appgrp" {
   name     = "app-rg11"
