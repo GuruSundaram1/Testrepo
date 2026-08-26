@@ -19,11 +19,6 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
-  # 3. Triggers when a team member formally reviews a Pull Request
-  pull_request_review:
-    types:
-      - submitted
-
 permissions:
   id-token: write
   contents: read
@@ -33,7 +28,6 @@ permissions:
 jobs:
   kics:
     name: KICS
-    # Runs unconditionally on ANY manual edit, branch push, or pull request event
     if: github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/kics.yaml
     with:
@@ -44,7 +38,6 @@ jobs:
   plan:
     name: Terraform Plan
     needs: kics
-    # FIXED: Allows planning to run unconditionally on ANY branch push or PR event
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
@@ -94,11 +87,8 @@ jobs:
   apply:
     name: Terraform Apply
     needs: plan
-    # STRICT GUARD: Stays locked and will ONLY unblock and run if an active PR review is APPROVED
-    if: >
-      github.actor != 'dependabot[bot]' &&
-      github.event_name == 'pull_request_review' &&
-      github.event.review.state == 'approved'
+    # FIXED: Only runs when a code push lands specifically on the main branch (e.g. via a PR Merge)
+    if: github.actor != 'dependabot[bot]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     env:
@@ -131,11 +121,10 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Download Terraform Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan
-          path: .
+      # FIXED: Generate a clean merge-stage deployment plan right before applying
+      - name: Terraform Plan (Merge Stage)
+        run: terraform plan -out=tfmergeplan
 
+      # FIXED: Executes the fresh merge plan against your active Azure Subscription
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve tfmergeplan
