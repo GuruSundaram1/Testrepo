@@ -1,12 +1,19 @@
 name: Terraform
 
 on:
-  # 1. Push to ANY branch (including main)
+  # ======================================================
+  # 1. PUSH
+  #    Runs on all branches, including main
+  #    Skips the workflow when only CHANGELOG.md changes
+  # ======================================================
   push:
     paths-ignore:
       - CHANGELOG.md
 
-  # 2. Pull Requests targeting main
+  # ======================================================
+  # 2. PULL REQUEST
+  #    Runs when PR targets main
+  # ======================================================
   pull_request:
     branches:
       - main
@@ -17,61 +24,98 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
+
+# =========================================================
+# DEFAULT PERMISSIONS
+# =========================================================
 permissions:
-  id-token: write
   contents: read
   security-events: write
   actions: read
 
+
 jobs:
+
   # ======================================================
-  # 1. KICS SECURITY SCAN (reusable workflow)
+  # 1. KICS SECURITY SCAN
   # ======================================================
   kics:
     name: KICS
+
     if: github.actor != 'dependabot[bot]'
+
     uses: ./.github/workflows/kics.yaml
+
     with:
       image-version: v1.6.10-alpine
       cloud-provider: azure
       gh_runner: ubuntu-latest
 
+
   # ======================================================
   # 2. TERRAFORM PLAN
-  #    Runs on:
-  #    - Pull Requests (PRs) targeting main
-  #    - Push to any branch EXCEPT main
+  #
+  # Runs on:
+  #   - Pull Requests targeting main
+  #   - Push to feature/non-main branches
+  #   - Push to main after PR merge
   # ======================================================
   plan:
     name: Terraform Plan
+
     needs: kics
-    if: |
-      github.actor != 'dependabot[bot]' && (
-        github.event_name == 'pull_request' ||
-        (github.event_name == 'push' && github.ref != 'refs/heads/main')
-      )
+
+    # Plan runs for all supported events.
+    # Apply is separately restricted to main.
+    if: github.actor != 'dependabot[bot]'
+
     runs-on: ubuntu-latest
+
+    # ====================================================
+    # OIDC permission required for Azure authentication
+    # ====================================================
+    permissions:
+      id-token: write
+      contents: read
 
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: true
+
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
       AZURE_CORE_COLLECT_TELEMETRY: "false"
 
     steps:
+
+      # --------------------------------------------------
+      # Checkout
+      # --------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------
+      # Setup Terraform
+      # --------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.3"
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
 
+      # --------------------------------------------------
+      # Terraform Format Check
+      # --------------------------------------------------
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+
+      # --------------------------------------------------
+      # Azure Login using OIDC
+      # --------------------------------------------------
       - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
@@ -79,25 +123,43 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
+
+      # --------------------------------------------------
+      # Terraform Init
+      # --------------------------------------------------
       - name: Terraform Init
         run: terraform init
 
+
+      # --------------------------------------------------
+      # Terraform Validate
+      # --------------------------------------------------
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan (Staging)
+
+      # --------------------------------------------------
+      # Terraform Plan
+      # --------------------------------------------------
+      - name: Terraform Plan
         run: terraform plan -out=tfplan
 
-      # 🔐 ENCRYPT the plan file before uploading
-      # Uses the TF_GPG_PASSPHRASE secret (must be set in repository)
+
+      # ==================================================
+      # Encrypt Terraform Plan
+      # ==================================================
       - name: Encrypt Terraform Plan
         run: |
-          # If the secret is not set, this will fail. Ensure you have set it.
           gpg --batch --yes --pinentry-mode loopback \
               --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
               --symmetric --cipher-algo AES256 tfplan
-          rm tfplan  # Remove unencrypted file
 
+          rm tfplan
+
+
+      # --------------------------------------------------
+      # Upload encrypted Terraform Plan
+      # --------------------------------------------------
       - name: Upload Encrypted Terraform Plan
         uses: actions/upload-artifact@v4
         with:
@@ -105,35 +167,73 @@ jobs:
           path: tfplan.gpg
           retention-days: 1
 
+
   # ======================================================
-  # 3. TERRAFORM APPLY (runs only on push to main – after merge)
+  # 3. TERRAFORM APPLY
+  #
+  # Runs ONLY after:
+  #   - Push to main
+  #   - Terraform Plan succeeds
+  #
+  # This happens after the PR is merged to main.
   # ======================================================
   apply:
     name: Terraform Apply
+
     needs: plan
-    if: github.actor != 'dependabot[bot]' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+
     runs-on: ubuntu-latest
+
+    # ====================================================
+    # OIDC permission required for Azure authentication
+    # ====================================================
+    permissions:
+      id-token: write
+      contents: read
 
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: true
+
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
       AZURE_CORE_COLLECT_TELEMETRY: "false"
 
     steps:
+
+      # --------------------------------------------------
+      # Checkout
+      # --------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------
+      # Setup Terraform
+      # --------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.3"
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
 
+      # --------------------------------------------------
+      # Terraform Format Check
+      # --------------------------------------------------
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+
+      # --------------------------------------------------
+      # Azure Login using OIDC
+      # --------------------------------------------------
       - name: Azure Login using OIDC
         uses: azure/login@v2
         with:
@@ -141,38 +241,26 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
+
+      # --------------------------------------------------
+      # Terraform Init
+      # --------------------------------------------------
       - name: Terraform Init
         run: terraform init
 
-      # --------------------------------------------------------------------
-      # Option A: Apply the reviewed plan (recommended for production)
-      # Uncomment the following steps and comment out Option B.
-      # --------------------------------------------------------------------
-      # - name: Download Encrypted Plan
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: terraform-plan-${{ github.sha }}
-      #     path: .
-      #     # Note: This downloads the artifact from the *same* run.
-      #     # For cross-run downloads, use a `workflow_run` trigger (see advanced).
-      #
-      # - name: Decrypt Plan
-      #   run: |
-      #     gpg --batch --yes --pinentry-mode loopback \
-      #         --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
-      #         --decrypt tfplan.gpg > tfplan
-      #
-      # - name: Terraform Apply
-      #   run: terraform apply -auto-approve tfplan
-      # --------------------------------------------------------------------
 
-      # --------------------------------------------------------------------
-      # Option B: Re‑run plan and apply (simpler, used by default)
-      # This is what the current workflow does.
-      # --------------------------------------------------------------------
-      - name: Terraform Plan (Merge Stage)
+      # --------------------------------------------------
+      # Generate a fresh plan on main
+      #
+      # This is intentionally a new plan.
+      # The PR plan artifact is NOT used for Apply.
+      # --------------------------------------------------
+      - name: Terraform Plan - Merge Stage
         run: terraform plan -out=tfmergeplan
 
+
+      # --------------------------------------------------
+      # Apply the exact plan generated above
+      # --------------------------------------------------
       - name: Terraform Apply
         run: terraform apply -auto-approve tfmergeplan
-      # -------------------------------------------------
