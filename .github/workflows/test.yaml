@@ -1,19 +1,20 @@
 name: Terraform
 
-
 on:
 
-  # ---------------------------------------------------------
-  # Run on pushes to any branch
-  # ---------------------------------------------------------
+  # =========================================================
+  # PUSH
+  # Run KICS + Terraform Plan on pushes to ANY branch
+  # =========================================================
   push:
     paths-ignore:
       - CHANGELOG.md
 
 
-  # ---------------------------------------------------------
-  # Run on PRs targeting ANY branch
-  # ---------------------------------------------------------
+  # =========================================================
+  # PULL REQUEST
+  # Run KICS + Terraform Plan for PRs targeting ANY branch
+  # =========================================================
   pull_request:
     types:
       - opened
@@ -23,14 +24,13 @@ on:
       - CHANGELOG.md
 
 
-# -----------------------------------------------------------
-# Permissions available to reusable KICS workflow
-# -----------------------------------------------------------
+# ===========================================================
+# WORKFLOW-LEVEL PERMISSIONS
+# ===========================================================
 permissions:
   contents: read
   security-events: write
   actions: read
-  issues: write
 
 
 jobs:
@@ -41,6 +41,7 @@ jobs:
   kics:
     name: KICS
 
+    # Do not run for Dependabot
     if: github.actor != 'dependabot[bot]'
 
     uses: ./.github/workflows/kics.yaml
@@ -53,12 +54,23 @@ jobs:
 
   # =========================================================
   # TERRAFORM PLAN
+  #
+  # Runs on whichever branch triggered the workflow.
+  #
+  # Examples:
+  #   feature/abc  -> Plan feature/abc
+  #   develop      -> Plan develop
+  #   main         -> Plan main
+  #
+  # Plan does NOT require the branch to be main.
   # =========================================================
   plan:
     name: Terraform Plan
 
+    # KICS must pass before Plan starts
     needs: kics
 
+    # Do not run for Dependabot
     if: github.actor != 'dependabot[bot]'
 
     runs-on: ubuntu-latest
@@ -68,19 +80,12 @@ jobs:
       contents: read
 
     env:
-
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-
       ARM_USE_OIDC: true
-
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-
       AZURE_CORE_COLLECT_TELEMETRY: "false"
-
 
     steps:
 
@@ -164,17 +169,28 @@ jobs:
 
   # =========================================================
   # TERRAFORM APPLY
+  #
+  # Apply ONLY runs when:
+  #
+  #   1. KICS passed
+  #   2. Terraform Plan passed
+  #   3. Event is a PUSH
+  #   4. Branch is MAIN
+  #   5. Actor is not Dependabot
+  #
+  # Therefore:
+  #
+  #   feature/abc -> NO APPLY
+  #   develop     -> NO APPLY
+  #   release/*   -> NO APPLY
+  #   main        -> APPLY
   # =========================================================
   apply:
     name: Terraform Apply
 
+    # Terraform Plan must succeed
     needs: plan
 
-    # Apply ONLY when:
-    # 1. Previous plan succeeded
-    # 2. Event is push
-    # 3. Push is to main
-    # 4. Actor is not Dependabot
     if: |
       github.actor != 'dependabot[bot]' &&
       github.event_name == 'push' &&
@@ -187,24 +203,23 @@ jobs:
       contents: read
 
     env:
-
       ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-
       ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-
       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-
       ARM_USE_OIDC: true
-
       TF_VAR_azure_subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-
       AZURE_CORE_COLLECT_TELEMETRY: "false"
-
 
     steps:
 
       # -------------------------------------------------------
-      # Checkout
+      # Checkout MAIN
+      #
+      # Since this job only runs on:
+      # github.ref == refs/heads/main
+      #
+      # checkout gets the main branch commit that triggered
+      # this workflow.
       # -------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
@@ -246,6 +261,8 @@ jobs:
 
       # -------------------------------------------------------
       # Create fresh Terraform plan
+      #
+      # This is intentionally generated again on MAIN.
       # -------------------------------------------------------
       - name: Terraform Plan
         run: terraform plan -out=tfmergeplan

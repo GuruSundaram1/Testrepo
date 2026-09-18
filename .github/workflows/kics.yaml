@@ -1,6 +1,9 @@
 name: KICS
 
 on:
+  # =========================================================
+  # Reusable workflow
+  # =========================================================
   workflow_call:
     inputs:
       image-version:
@@ -21,6 +24,9 @@ on:
         default: "ubuntu-latest"
         type: string
 
+  # =========================================================
+  # Manual execution
+  # =========================================================
   workflow_dispatch:
     inputs:
       image-version:
@@ -42,32 +48,62 @@ on:
         type: string
 
 
+# ===========================================================
+# Permissions
+# ===========================================================
 permissions:
   contents: read
   security-events: write
-  issues: write
 
 
+# ===========================================================
+# Jobs
+# ===========================================================
 jobs:
 
   kics:
     name: KICS Scan
+
     runs-on: ${{ inputs.gh_runner || 'ubuntu-latest' }}
 
     steps:
 
-      # ---------------------------------------------------------
+      # -------------------------------------------------------
       # Checkout source code
-      # ---------------------------------------------------------
+      # -------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
 
-      # ---------------------------------------------------------
+      # -------------------------------------------------------
+      # Display scan information
+      # -------------------------------------------------------
+      - name: KICS Configuration
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "              KICS CONFIGURATION"
+          echo "=================================================="
+          echo ""
+          echo "Cloud Provider : ${{ inputs.cloud-provider || 'azure' }}"
+          echo "Runner         : ${{ inputs.gh_runner || 'ubuntu-latest' }}"
+          echo "KICS Input Ver : ${{ inputs.image-version || 'v1.6.10-alpine' }}"
+          echo "Failure Level  : HIGH"
+          echo ""
+          echo "=================================================="
+
+
+      # -------------------------------------------------------
       # Run KICS
-      # ---------------------------------------------------------
+      #
+      # IMPORTANT:
+      # fail_on: high
+      #
+      # HIGH and CRITICAL findings fail the KICS scan.
+      # MEDIUM / LOW / INFO do not fail the scan.
+      # -------------------------------------------------------
       - name: Run KICS Scan
         id: kics
         uses: checkmarx/kics-github-action@v2
@@ -79,443 +115,129 @@ jobs:
           ignore_on_exit: none
           verbose: true
           enable_jobs_summary: true
-          enable_comments: true
+          enable_comments: false
 
 
-      # ---------------------------------------------------------
-      # Display KICS failure reason
-      # This step runs even when KICS fails.
-      # ---------------------------------------------------------
-      - name: KICS Failure Reason
+      # -------------------------------------------------------
+      # Show KICS result files
+      #
+      # This runs even when KICS fails.
+      # -------------------------------------------------------
+      - name: KICS Result Files
+        if: always()
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "              KICS RESULT FILES"
+          echo "=================================================="
+          echo ""
+
+          if [ -d "kics-results" ]; then
+            echo "KICS results directory exists."
+            echo ""
+            find kics-results -maxdepth 2 -type f -print
+          else
+            echo "KICS results directory was not generated."
+          fi
+
+          echo ""
+          echo "=================================================="
+
+
+      # -------------------------------------------------------
+      # KICS Result Summary
+      #
+      # Do NOT calculate pass/fail here.
+      # The KICS action itself determines pass/fail.
+      # -------------------------------------------------------
+      - name: KICS Result Summary
         if: always()
         shell: bash
         run: |
           echo "=================================================="
           echo "              KICS SCAN RESULT"
           echo "=================================================="
+          echo ""
 
-          if [ ! -f "kics-results/results.json" ]; then
-            echo ""
-            echo "KICS results.json was not generated."
-            echo "Please check the Run KICS Scan step above."
-            echo ""
-            exit 0
+          if [ -f "kics-results/results.json" ]; then
+            echo "KICS results.json generated successfully."
+          else
+            echo "WARNING: KICS results.json was not generated."
           fi
 
-          python3 <<'PY'
-          import json
+          if [ -f "kics-results/results.sarif" ]; then
+            echo "KICS results.sarif generated successfully."
+          else
+            echo "WARNING: KICS results.sarif was not generated."
+          fi
 
-          results_file = "kics-results/results.json"
-
-          try:
-              with open(results_file, "r") as f:
-                  data = json.load(f)
-          except Exception as e:
-              print("")
-              print("Unable to parse KICS results.json")
-              print(f"Error: {e}")
-              print("")
-              raise SystemExit(0)
-
-          queries = data.get("queries", [])
-
-          critical = []
-          high = []
-          medium = []
-          low = []
-          info = []
-
-          for query in queries:
-
-              severity = str(
-                  query.get("severity", "")
-              ).upper()
-
-              query_name = query.get(
-                  "query_name",
-                  "Unknown KICS Query"
-              )
-
-              description = query.get(
-                  "description",
-                  ""
-              )
-
-              for result in query.get(
-                  "query_results",
-                  []
-              ):
-
-                  finding = {
-                      "severity": severity,
-                      "name": query_name,
-                      "description": description,
-                      "file": result.get(
-                          "file_name",
-                          "Unknown"
-                      ),
-                      "line": result.get(
-                          "line",
-                          "Unknown"
-                      )
-                  }
-
-                  if severity == "CRITICAL":
-                      critical.append(finding)
-
-                  elif severity == "HIGH":
-                      high.append(finding)
-
-                  elif severity == "MEDIUM":
-                      medium.append(finding)
-
-                  elif severity == "LOW":
-                      low.append(finding)
-
-                  elif severity == "INFO":
-                      info.append(finding)
+          echo ""
+          echo "The KICS action above is responsible for determining"
+          echo "the scan pass/fail status."
+          echo ""
+          echo "Configured failure threshold:"
+          echo "  fail_on: high"
+          echo ""
+          echo "HIGH and CRITICAL findings block the pipeline."
+          echo "MEDIUM, LOW and INFO findings do not block the pipeline."
+          echo ""
+          echo "=================================================="
 
 
-          print("")
-          print("KICS FINDINGS SUMMARY")
-          print("----------------------")
-          print(f"CRITICAL : {len(critical)}")
-          print(f"HIGH     : {len(high)}")
-          print(f"MEDIUM   : {len(medium)}")
-          print(f"LOW      : {len(low)}")
-          print(f"INFO     : {len(info)}")
-          print(
-              f"TOTAL    : {len(critical) + len(high) + len(medium) + len(low) + len(info)}"
-          )
-          print("")
-
-          blocking = critical + high
-
-          if blocking:
-
-              print("==================================================")
-              print("KICS SCAN FAILED")
-              print("==================================================")
-              print("")
-              print(
-                  "Failure reason: HIGH or CRITICAL severity "
-                  "findings were detected."
-              )
-              print("")
-              print("Configured failure threshold:")
-              print("fail_on: high")
-              print("")
-              print("Findings causing pipeline failure:")
-              print("")
-
-              for index, finding in enumerate(
-                  blocking,
-                  start=1
-              ):
-
-                  print(
-                      f"{index}. "
-                      f"[{finding['severity']}] "
-                      f"{finding['name']}"
-                  )
-
-                  print(
-                      f"   File : {finding['file']}"
-                  )
-
-                  print(
-                      f"   Line : {finding['line']}"
-                  )
-
-                  if finding["description"]:
-                      print(
-                          f"   Reason: "
-                          f"{finding['description']}"
-                      )
-
-                  print("")
-
-          else:
-
-              print("==================================================")
-              print("KICS SCAN PASSED")
-              print("==================================================")
-              print("")
-              print(
-                  "No HIGH or CRITICAL severity findings "
-                  "were detected."
-              )
-              print("")
-              print(
-                  "Terraform Plan can continue."
-              )
-              print("")
-          PY
-
-
-      # ---------------------------------------------------------
-      # GitHub Job Summary
-      # ---------------------------------------------------------
+      # -------------------------------------------------------
+      # Add result information to GitHub Step Summary
+      # -------------------------------------------------------
       - name: KICS GitHub Summary
         if: always()
         shell: bash
         run: |
-          python3 <<'PY'
-          import json
-          import os
-
-          results_file = "kics-results/results.json"
-          summary_file = os.environ["GITHUB_STEP_SUMMARY"]
-
-          if not os.path.exists(results_file):
-
-              with open(summary_file, "a") as f:
-                  f.write(
-                      "# ❌ KICS Scan Failed\n\n"
-                      "KICS `results.json` was not generated.\n"
-                  )
-
-              raise SystemExit(0)
-
-
-          try:
-
-              with open(results_file, "r") as f:
-                  data = json.load(f)
-
-          except Exception as e:
-
-              with open(summary_file, "a") as f:
-                  f.write(
-                      "# ❌ KICS Scan Failed\n\n"
-                      f"Unable to parse `results.json`.\n\n"
-                      f"Error: `{e}`\n"
-                  )
-
-              raise SystemExit(0)
-
-
-          queries = data.get("queries", [])
-
-          critical = []
-          high = []
-          medium = []
-          low = []
-          info = []
-
-
-          for query in queries:
-
-              severity = str(
-                  query.get("severity", "")
-              ).upper()
-
-              query_name = query.get(
-                  "query_name",
-                  "Unknown KICS Query"
-              )
-
-              description = query.get(
-                  "description",
-                  ""
-              )
-
-              for result in query.get(
-                  "query_results",
-                  []
-              ):
-
-                  finding = {
-                      "severity": severity,
-                      "name": query_name,
-                      "description": description,
-                      "file": result.get(
-                          "file_name",
-                          "Unknown"
-                      ),
-                      "line": result.get(
-                          "line",
-                          "Unknown"
-                      )
-                  }
-
-                  if severity == "CRITICAL":
-                      critical.append(finding)
-
-                  elif severity == "HIGH":
-                      high.append(finding)
-
-                  elif severity == "MEDIUM":
-                      medium.append(finding)
-
-                  elif severity == "LOW":
-                      low.append(finding)
-
-                  elif severity == "INFO":
-                      info.append(finding)
-
-
-          blocking = critical + high
-
-
-          with open(summary_file, "a") as f:
-
-              if blocking:
-
-                  f.write("# ❌ KICS Scan Failed\n\n")
-
-                  f.write(
-                      "## Failure Reason\n\n"
-                  )
-
-                  f.write(
-                      "HIGH or CRITICAL severity "
-                      "findings were detected.\n\n"
-                  )
-
-                  f.write(
-                      "Configured failure threshold: "
-                      "`fail_on: high`\n\n"
-                  )
-
-              else:
-
-                  f.write("# ✅ KICS Scan Passed\n\n")
-
-                  f.write(
-                      "No HIGH or CRITICAL findings "
-                      "were detected.\n\n"
-                  )
-
-
-              f.write("## KICS Summary\n\n")
-
-              f.write("| Severity | Findings |\n")
-              f.write("|---|---:|\n")
-              f.write(
-                  f"| Critical | {len(critical)} |\n"
-              )
-              f.write(
-                  f"| High | {len(high)} |\n"
-              )
-              f.write(
-                  f"| Medium | {len(medium)} |\n"
-              )
-              f.write(
-                  f"| Low | {len(low)} |\n"
-              )
-              f.write(
-                  f"| Info | {len(info)} |\n"
-              )
-              f.write(
-                  f"| **Total** | "
-                  f"**{len(critical) + len(high) + len(medium) + len(low) + len(info)}** |\n"
-              )
-
-              f.write("\n")
-
-
-              if blocking:
-
-                  f.write(
-                      "## Findings Causing Pipeline Failure\n\n"
-                  )
-
-                  f.write(
-                      "| Severity | Query | File | Line |\n"
-                  )
-
-                  f.write(
-                      "|---|---|---|---:|\n"
-                  )
-
-                  for finding in blocking:
-
-                      query_name = (
-                          finding["name"]
-                          .replace("|", "\\|")
-                      )
-
-                      file_name = (
-                          finding["file"]
-                          .replace("|", "\\|")
-                      )
-
-                      f.write(
-                          f"| {finding['severity']} "
-                          f"| {query_name} "
-                          f"| {file_name} "
-                          f"| {finding['line']} |\n"
-                      )
-
-                  f.write("\n")
-
-                  f.write(
-                      "## Failure Details\n\n"
-                  )
-
-                  for index, finding in enumerate(
-                      blocking,
-                      start=1
-                  ):
-
-                      f.write(
-                          f"### {index}. "
-                          f"[{finding['severity']}] "
-                          f"{finding['name']}\n\n"
-                      )
-
-                      f.write(
-                          f"- **File:** `{finding['file']}`\n"
-                      )
-
-                      f.write(
-                          f"- **Line:** `{finding['line']}`\n"
-                      )
-
-                      if finding["description"]:
-
-                          f.write(
-                              f"- **Description:** "
-                              f"{finding['description']}\n"
-                          )
-
-                      f.write("\n")
-
-
-                  f.write(
-                      "> ❌ Terraform Plan is blocked because "
-                      "KICS detected HIGH/CRITICAL findings.\n"
-                  )
-
-              else:
-
-                  f.write(
-                      "> ✅ No HIGH or CRITICAL findings "
-                      "detected. Terraform Plan can continue.\n"
-                  )
-
-          PY
-
-
-      # ---------------------------------------------------------
+          {
+            echo "# KICS Scan"
+            echo ""
+            echo "## Configuration"
+            echo ""
+            echo "| Setting | Value |"
+            echo "|---|---|"
+            echo "| Failure threshold | \`high\` |"
+            echo "| Cloud provider | \`${{ inputs.cloud-provider || 'azure' }}\` |"
+            echo "| Runner | \`${{ inputs.gh_runner || 'ubuntu-latest' }}\` |"
+            echo ""
+            echo "## Result"
+            echo ""
+            echo "KICS scan output is available in the job logs and uploaded artifacts."
+            echo ""
+            echo "### Failure Policy"
+            echo ""
+            echo "- **CRITICAL** → Fail"
+            echo "- **HIGH** → Fail"
+            echo "- **MEDIUM** → Pass"
+            echo "- **LOW** → Pass"
+            echo "- **INFO** → Pass"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+      # -------------------------------------------------------
       # Upload SARIF to GitHub Code Scanning
-      # ---------------------------------------------------------
+      #
+      # Run even when KICS fails so findings are available.
+      # -------------------------------------------------------
       - name: Upload SARIF to Code Scanning
-        if: always()
+        if: always() && hashFiles('kics-results/results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: kics-results/results.sarif
           category: KICS
 
 
-      # ---------------------------------------------------------
-      # Upload KICS results as artifact
-      # ---------------------------------------------------------
+      # -------------------------------------------------------
+      # Upload KICS results
+      # -------------------------------------------------------
       - name: Upload KICS Results Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kics-results
+          name: kics-results-${{ github.run_id }}
           path: kics-results/
+          if-no-files-found: warn
           retention-days: 3
