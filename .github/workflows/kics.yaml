@@ -1,16 +1,12 @@
 name: KICS
 
 on:
+
   # =========================================================
-  # Reusable workflow
+  # REUSABLE WORKFLOW
   # =========================================================
   workflow_call:
     inputs:
-      image-version:
-        description: "KICS image version"
-        required: false
-        default: "v1.6.10-alpine"
-        type: string
 
       cloud-provider:
         description: "Cloud provider"
@@ -24,16 +20,12 @@ on:
         default: "ubuntu-latest"
         type: string
 
+
   # =========================================================
-  # Manual execution
+  # MANUAL EXECUTION
   # =========================================================
   workflow_dispatch:
     inputs:
-      image-version:
-        description: "KICS image version"
-        required: false
-        default: "v1.6.10-alpine"
-        type: string
 
       cloud-provider:
         description: "Cloud provider"
@@ -49,7 +41,7 @@ on:
 
 
 # ===========================================================
-# Permissions
+# PERMISSIONS
 # ===========================================================
 permissions:
   contents: read
@@ -57,7 +49,7 @@ permissions:
 
 
 # ===========================================================
-# Jobs
+# JOBS
 # ===========================================================
 jobs:
 
@@ -68,18 +60,18 @@ jobs:
 
     steps:
 
-      # -------------------------------------------------------
-      # Checkout source code
-      # -------------------------------------------------------
+      # =====================================================
+      # CHECKOUT
+      # =====================================================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
 
-      # -------------------------------------------------------
-      # Display scan information
-      # -------------------------------------------------------
+      # =====================================================
+      # KICS CONFIGURATION
+      # =====================================================
       - name: KICS Configuration
         shell: bash
         run: |
@@ -87,42 +79,70 @@ jobs:
           echo "              KICS CONFIGURATION"
           echo "=================================================="
           echo ""
-          echo "Cloud Provider : ${{ inputs.cloud-provider || 'azure' }}"
-          echo "Runner         : ${{ inputs.gh_runner || 'ubuntu-latest' }}"
-          echo "KICS Input Ver : ${{ inputs.image-version || 'v1.6.10-alpine' }}"
-          echo "Failure Level  : HIGH"
+          echo "KICS Action   : v2.1.20"
+          echo "KICS Version  : 2.1.20"
+          echo "Cloud Provider: ${{ inputs.cloud-provider || 'azure' }}"
+          echo "Runner        : ${{ inputs.gh_runner || 'ubuntu-latest' }}"
+          echo "Failure Level : HIGH"
+          echo "Comments      : Disabled"
+          echo "Annotations   : Disabled"
           echo ""
           echo "=================================================="
 
 
-      # -------------------------------------------------------
-      # Run KICS
+      # =====================================================
+      # RUN KICS SCAN
       #
-      # IMPORTANT:
-      # fail_on: high
+      # HIGH / CRITICAL findings cause the KICS action
+      # to return a non-zero exit code.
       #
-      # HIGH and CRITICAL findings fail the KICS scan.
-      # MEDIUM / LOW / INFO do not fail the scan.
-      # -------------------------------------------------------
+      # MEDIUM / LOW / INFO do not fail the pipeline.
+      # =====================================================
       - name: Run KICS Scan
         id: kics
-        uses: checkmarx/kics-github-action@v2
+        uses: checkmarx/kics-github-action@v2.1.20
         with:
+
+          # Directory to scan
           path: .
+
+          # Output directory
           output_path: kics-results
+
+          # Generate JSON and SARIF
           output_formats: sarif,json
+
+          # Fail only on HIGH and CRITICAL
           fail_on: high
+
+          # Do not ignore KICS result/error exit codes
           ignore_on_exit: none
+
+          # Detailed KICS logs
           verbose: true
+
+          # GitHub Actions job summary
           enable_jobs_summary: true
+
+          # Disable PR comments
           enable_comments: false
 
+          # IMPORTANT:
+          # Disable GitHub annotations.
+          # This avoids the post-scan annotation processing that
+          # was followed by the Node/GLIBC error in your run.
+          enable_annotations: false
 
-      # -------------------------------------------------------
-      # Show KICS result files
+          # Azure scanning
+          cloud_provider: ${{ inputs.cloud-provider || 'azure' }}
+
+
+      # =====================================================
+      # KICS RESULT FILES
       #
-      # This runs even when KICS fails.
-      # -------------------------------------------------------
+      # Always execute this step so results can be inspected
+      # even if the KICS scan fails.
+      # =====================================================
       - name: KICS Result Files
         if: always()
         shell: bash
@@ -133,23 +153,29 @@ jobs:
           echo ""
 
           if [ -d "kics-results" ]; then
+
             echo "KICS results directory exists."
             echo ""
+
             find kics-results -maxdepth 2 -type f -print
+
           else
+
             echo "KICS results directory was not generated."
+
           fi
 
           echo ""
           echo "=================================================="
 
 
-      # -------------------------------------------------------
-      # KICS Result Summary
+      # =====================================================
+      # KICS RESULT SUMMARY
       #
-      # Do NOT calculate pass/fail here.
-      # The KICS action itself determines pass/fail.
-      # -------------------------------------------------------
+      # Do not attempt to parse results.json here.
+      # The KICS action itself determines pass/fail using
+      # fail_on: high.
+      # =====================================================
       - name: KICS Result Summary
         if: always()
         shell: bash
@@ -172,21 +198,22 @@ jobs:
           fi
 
           echo ""
-          echo "The KICS action above is responsible for determining"
-          echo "the scan pass/fail status."
+          echo "KICS failure threshold:"
           echo ""
-          echo "Configured failure threshold:"
-          echo "  fail_on: high"
+          echo "  HIGH     -> FAIL"
+          echo "  CRITICAL -> FAIL"
+          echo "  MEDIUM   -> PASS"
+          echo "  LOW      -> PASS"
+          echo "  INFO     -> PASS"
           echo ""
-          echo "HIGH and CRITICAL findings block the pipeline."
-          echo "MEDIUM, LOW and INFO findings do not block the pipeline."
+          echo "The KICS action determines the actual job status."
           echo ""
           echo "=================================================="
 
 
-      # -------------------------------------------------------
-      # Add result information to GitHub Step Summary
-      # -------------------------------------------------------
+      # =====================================================
+      # GITHUB STEP SUMMARY
+      # =====================================================
       - name: KICS GitHub Summary
         if: always()
         shell: bash
@@ -198,30 +225,32 @@ jobs:
             echo ""
             echo "| Setting | Value |"
             echo "|---|---|"
-            echo "| Failure threshold | \`high\` |"
-            echo "| Cloud provider | \`${{ inputs.cloud-provider || 'azure' }}\` |"
-            echo "| Runner | \`${{ inputs.gh_runner || 'ubuntu-latest' }}\` |"
+            echo "| KICS Action | \`v2.1.20\` |"
+            echo "| Cloud Provider | \`${{ inputs.cloud-provider || 'azure' }}\` |"
+            echo "| Failure Threshold | \`high\` |"
+            echo "| PR Comments | Disabled |"
+            echo "| Annotations | Disabled |"
             echo ""
-            echo "## Result"
+            echo "## Failure Policy"
             echo ""
-            echo "KICS scan output is available in the job logs and uploaded artifacts."
+            echo "| Severity | Result |"
+            echo "|---|---|"
+            echo "| CRITICAL | ❌ Fail |"
+            echo "| HIGH | ❌ Fail |"
+            echo "| MEDIUM | ✅ Pass |"
+            echo "| LOW | ✅ Pass |"
+            echo "| INFO | ✅ Pass |"
             echo ""
-            echo "### Failure Policy"
-            echo ""
-            echo "- **CRITICAL** → Fail"
-            echo "- **HIGH** → Fail"
-            echo "- **MEDIUM** → Pass"
-            echo "- **LOW** → Pass"
-            echo "- **INFO** → Pass"
+            echo "KICS JSON and SARIF reports are uploaded as workflow artifacts."
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
 
-      # -------------------------------------------------------
-      # Upload SARIF to GitHub Code Scanning
+      # =====================================================
+      # UPLOAD SARIF TO CODE SCANNING
       #
-      # Run even when KICS fails so findings are available.
-      # -------------------------------------------------------
+      # Always attempt upload if SARIF exists.
+      # =====================================================
       - name: Upload SARIF to Code Scanning
         if: always() && hashFiles('kics-results/results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
@@ -230,9 +259,9 @@ jobs:
           category: KICS
 
 
-      # -------------------------------------------------------
-      # Upload KICS results
-      # -------------------------------------------------------
+      # =====================================================
+      # UPLOAD KICS RESULTS
+      # =====================================================
       - name: Upload KICS Results Artifact
         if: always()
         uses: actions/upload-artifact@v4

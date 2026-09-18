@@ -10,7 +10,6 @@ on:
     paths-ignore:
       - CHANGELOG.md
 
-
   # =========================================================
   # PULL REQUEST
   # Run KICS + Terraform Plan for PRs targeting ANY branch
@@ -47,7 +46,6 @@ jobs:
     uses: ./.github/workflows/kics.yaml
 
     with:
-      image-version: v1.6.10-alpine
       cloud-provider: azure
       gh_runner: ubuntu-latest
 
@@ -55,12 +53,12 @@ jobs:
   # =========================================================
   # TERRAFORM PLAN
   #
-  # Runs on whichever branch triggered the workflow.
+  # Runs on whichever branch/event triggered the workflow.
   #
   # Examples:
-  #   feature/abc  -> Plan feature/abc
-  #   develop      -> Plan develop
-  #   main         -> Plan main
+  #   feature/abc -> Plan
+  #   develop     -> Plan
+  #   main        -> Plan
   #
   # Plan does NOT require the branch to be main.
   # =========================================================
@@ -91,9 +89,17 @@ jobs:
 
       # -------------------------------------------------------
       # Checkout
+      #
+      # For PR:
+      #   Checkout actual PR source commit
+      #
+      # For push:
+      #   Checkout pushed commit
       # -------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
 
       # -------------------------------------------------------
@@ -150,8 +156,10 @@ jobs:
       - name: Encrypt Terraform Plan
         run: |
           gpg --batch --yes --pinentry-mode loopback \
-              --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
-              --symmetric --cipher-algo AES256 tfplan
+            --passphrase "${{ secrets.TF_GPG_PASSPHRASE }}" \
+            --symmetric \
+            --cipher-algo AES256 \
+            tfplan
 
           rm tfplan
 
@@ -174,7 +182,7 @@ jobs:
   #
   #   1. KICS passed
   #   2. Terraform Plan passed
-  #   3. Event is a PUSH
+  #   3. Event is PUSH
   #   4. Branch is MAIN
   #   5. Actor is not Dependabot
   #
@@ -214,12 +222,6 @@ jobs:
 
       # -------------------------------------------------------
       # Checkout MAIN
-      #
-      # Since this job only runs on:
-      # github.ref == refs/heads/main
-      #
-      # checkout gets the main branch commit that triggered
-      # this workflow.
       # -------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
@@ -260,9 +262,7 @@ jobs:
 
 
       # -------------------------------------------------------
-      # Create fresh Terraform plan
-      #
-      # This is intentionally generated again on MAIN.
+      # Create fresh Terraform plan on MAIN
       # -------------------------------------------------------
       - name: Terraform Plan
         run: terraform plan -out=tfmergeplan
